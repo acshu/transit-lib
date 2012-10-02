@@ -1,0 +1,146 @@
+import sys
+import os.path
+import csv
+from transitlib.transit import Transit
+import matplotlib.pyplot as pyplot
+
+orbit_radius = 10
+star_radius = 1
+planet_radius = 0.1
+star_temperature = 8000
+planet_temperature = 80
+star_darkening = 0.2
+phase_start = 0
+phase_end = 0.2
+phase_step = 0.001
+
+data = []
+export_file = None
+export_separator = "\t"
+
+os.system('cls' if os.name == 'nt' else 'clear')
+print ""
+print "Transit"
+
+
+# collect arguments
+prev_argument = None
+for argument in sys.argv[1:]:
+
+    if argument == "-h":
+        print ""
+        print "Help:"
+        print "\t-h                    Prints this help information"
+        print "\t-i                    Interactive mode for input parameters"
+        print "\t-p                    Plots the result"
+        print "\t-d params.dat         Input parameters file"
+        print ""
+        print "\t                          orbit_radius=12"
+        print "\t                          star_radius=1"
+        print "\t                          planet_radius=0.1"
+        print "\t                          star_temperature=8000"
+        print "\t                          planet_temperature=80"
+        print "\t                          star_darkening=0.2"
+        print "\t                          phase_start=0.0"
+        print "\t                          phase_end=0.2"
+        print "\t                          phase_step=0.0001"
+        print ""
+        print "\t-e result.dat         Result export file"
+        print "\t-s ,                  Separator for export file (default: \\t)"
+        print ""
+        exit()
+
+    if prev_argument == "-d" and os.path.isfile(argument) :
+        file = open(argument)
+        data = [line.strip() for line in file]
+        file.close()
+
+    if prev_argument == "-e":
+        export_file = argument
+
+    if prev_argument == "-s":
+        argument = "\t" if argument == "\\t" else argument
+        argument = "\n" if argument == "\\n" else argument
+        export_separator = argument
+
+    prev_argument = argument
+
+# read input file
+for param in data :
+    name, value = param.split("=")
+
+    if name == "orbit_radius"       : orbit_radius = value
+    if name == "star_radius"        : star_radius = value
+    if name == "planet_radius"      : planet_radius = value
+    if name == "star_temperature"   : star_temperature = value
+    if name == "planet_temperature" : planet_temperature = value
+    if name == "star_darkening"     : star_darkening = value
+    if name == "phase_start"        : phase_start = value
+    if name == "phase_end"          : phase_end = value
+    if name == "phase_step"         : phase_step = value
+        
+# ask user for input
+if sys.argv.count("-i") > 0 :
+    orbit_radius        = raw_input("Orbit radius       [AU]: ") or orbit_radius
+    star_radius         = raw_input("Star radius        [AU]: ") or star_radius
+    planet_radius       = raw_input("Planet radius      [AU]: ") or planet_radius
+    star_temperature    = raw_input("Star temperature   [K]:  ") or star_temperature
+    planet_temperature  = raw_input("Planet temperature [K]:  ") or planet_temperature
+    star_darkening      = raw_input("Star darkening:          ") or star_darkening
+    phase_start         = raw_input("Phase start:             ") or phase_start
+    phase_end           = raw_input("Phase end:               ") or phase_end
+    phase_step          = raw_input("Phase step:              ") or phase_step
+
+
+print ""
+print "Params"
+print "----------------------------------------"
+print "Orbit radius       [AU]: "  + str(orbit_radius)
+print "Star radius        [AU]: "  + str(star_radius)
+print "Planet radius      [AU]: "  + str(planet_radius)
+print "Star temperature   [K]:  "  + str(star_temperature)
+print "Planet temperature [K]:  "  + str(planet_temperature)
+print "Star darkening:          "  + str(star_darkening)
+print "Phase start:             "  + str(phase_start)
+print "Phase end:               "  + str(phase_end)
+print "Phase step:              "  + str(phase_step)
+print "----------------------------------------"
+print ""
+print "Progress"
+
+
+def onProgress(progress):
+    repeat_fill = int(float(progress/(100/30)))
+    repeat_empty = int(float(100//(100/30))) - repeat_fill
+    
+    sys.stdout.write("\r[" + ('-' * repeat_fill) + (' ' * repeat_empty)  + "] " + str(progress) + "%")
+
+def onComplete(phases, results):
+    print ""
+    print ""
+    print "Completed"
+    
+    if not export_file is None :
+        print "Writing: " + export_file
+        with open(export_file, 'wb') as csvfile:
+            writer = csv.writer(csvfile, delimiter=export_separator)
+            for index in range(len(phases)):
+                writer.writerow([phases[index], results[index]])
+    
+    if sys.argv.count("-p") > 0 :
+        pyplot.plot(phases, results)
+        pyplot.show()
+
+transit = Transit()
+transit.set_orbit_radius(orbit_radius)
+transit.set_star_radius(star_radius)
+transit.set_planet_radius(planet_radius)
+transit.set_star_temperature(star_temperature)
+transit.set_planet_temperature(planet_temperature)
+transit.set_star_darkening(star_darkening)
+transit.set_phase_start(phase_start)
+transit.set_phase_end(phase_end)
+transit.set_phase_step(phase_step)
+transit.onProgress = onProgress
+transit.onComplete = onComplete
+transit.run()

@@ -10,6 +10,7 @@ parts
 bin
 var
 sdist
+dist
 develop-eggs
 .installed.cfg
 
@@ -25,3 +26,7 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
+data.txt
+export.txt
+/.spyderproject

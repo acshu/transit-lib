@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import sys
 import os.path
 import csv
@@ -98,12 +99,12 @@ print "----------------------------------------"
 print "Orbit radius       [AU]: "  + str(orbit_radius)
 print "Star radius        [AU]: "  + str(star_radius)
 print "Planet radius      [AU]: "  + str(planet_radius)
-print "Star temperature   [K]:  "  + str(star_temperature)
-print "Planet temperature [K]:  "  + str(planet_temperature)
-print "Star darkening:          "  + str(star_darkening)
-print "Phase start:             "  + str(phase_start)
-print "Phase end:               "  + str(phase_end)
-print "Phase step:              "  + str(phase_step)
+print "Star temperature   [K] : "  + str(star_temperature)
+print "Planet temperature [K] : "  + str(planet_temperature)
+print "Star darkening         : "  + str(star_darkening)
+print "Phase start            : "  + str(phase_start)
+print "Phase end              : "  + str(phase_end)
+print "Phase step             : "  + str(phase_step)
 print "----------------------------------------"
 print ""
 print "Progress"

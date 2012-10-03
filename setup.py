@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
-from distutils.core import setup
+from setuptools import setup, find_packages
+
 setup(name='transitlib',
-      version='0.1.1.1',
+      version='0.1',
       description="Star planet transit calculation package",
       author="Anatoli Vladev",
       author_email="avladev@gmail.com",
       url="http://github.com/acshu/transit-lib",
-      packages=['transitlib'],
+      packages=find_packages(),
       scripts=['transit','transit.bat'],
       platforms="All",
       license="GPL",

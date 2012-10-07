@@ -30,3 +30,5 @@ pip-log.txt
 data.txt
 export.txt
 /.spyderproject
+/params.txt
+/result.dat

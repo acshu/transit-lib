@@ -1,35 +1,33 @@
 # -*- coding: utf-8 -*-
+#
 
-import scipy
-import scipy.integrate
-import scipy.constants
+from numpy import radians,pi,sin,cos,arcsin,arctan,log10,real_if_close,finfo,isnan
+from numpy import arccos as acos
+from scipy import sqrt
+from scipy.integrate import quad
 
 class Transit(object):
     
-    orbit_radius        = None
-    star_radius         = None
-    planet_radius       = None
-    star_temperature    = None
-    planet_temperature  = None
-    star_darkening      = None
-    
-    phase_start     = float(0)
-    phase_end       = float(1)
-    phase_step      = float(0.0001)
-    _phase          = float(0)
-    completed       = 0
-
-    phase1 = float(0)
-    phase2 = float(0)
-    phase6 = float(0)
-    stopped = False
-    
     def __init__(self):
         super(Transit, self).__init__()
-        return
+        self.semi_major_axis    = None
+        self.star_radius        = None
+        self.planet_radius      = None
+        self.star_temperature   = None
+        self.planet_temperature = None
+        self.star_darkening     = None
+        self.inclination        = None
         
-    def set_orbit_radius(self, radius):
-        self.orbit_radius = float(radius)
+        self.phase_start     = float(0)
+        self.phase_end       = float(1)
+        self.phase_step      = float(0.0001)
+        self.completed       = 0
+    
+        self.stopped = False
+        pass
+    
+    def set_semi_major_axis(self, semi_major_axis):
+        self.semi_major_axis = float(semi_major_axis)
         
     def set_star_radius(self, radius):
         self.star_radius = float(radius)
@@ -42,6 +40,10 @@ class Transit(object):
         
     def set_planet_temperature(self, temperature):
         self.planet_temperature = float(temperature)
+        
+    def set_inclination(self, inclination):
+        self.inclination = inclination
+        self.inclination_rad = radians(self.inclination)
         
     def set_star_darkening(self, darkening):
         self.star_darkening = float(darkening)
@@ -57,39 +59,7 @@ class Transit(object):
 
     def stop(self):
         self.stopped = True
-    
-    def star_intensity(self):
-        return scipy.constants.sigma * self.star_temperature**4
-        
-    def planet_intensity(self):
-        return scipy.constants.sigma * self.planet_temperature**4
-        
-    def star_luminosity(self):
-        return scipy.pi * self.star_radius**2 * self.star_intensity() * ( 1 - (self.star_darkening/3))
-        
-    def planet_luminosity(self):
-        return scipy.pi * self.planet_radius**2 * self.planet_intensity()
-        
-    def x0(self):
-        return self.orbit_radius * scipy.sin(2 * scipy.pi * self._phase)
-        
-    def x1(self, x):
-        x0 = self.x0()
 
-        if x0 == 0 :
-            return 0
-        
-        return (x0**2 + x**2 - self.planet_radius**2)/(2*x0)
-        
-    def gamma(self, x):
-        return scipy.arccos(self.x1(x)/x)
-        
-    def eq1(self, x):
-        return self.star_intensity() * 2 * x * self.gamma(x) * ( 1 - self.star_darkening + self.star_darkening * scipy.sqrt((1-(x/self.star_radius)**2)))
-        
-    def eq2(self, x):
-        return self.star_intensity() * 2 * scipy.pi * x * ( 1 - self.star_darkening + self.star_darkening * scipy.sqrt((1-(x/self.star_radius)**2)))
-        
     def onStop(self):
         pass
     
@@ -100,65 +70,179 @@ class Transit(object):
         pass
         
     def run(self):
-
-        if self.orbit_radius is None : raise Exception("Invalid orbit radius!")
-        if self.star_radius is None : raise Exception("Invalid star radius!")
-        if self.planet_radius is None : raise Exception("Invalid planet radius!")
-        if self.star_temperature is None : raise Exception("Invalid start temperature!")
-        if self.planet_temperature is None : raise Exception("Invalid planet temperature!")
-        if self.star_darkening is None : raise Exception("Invalid star darkening coeficient!")
         
-        self.phase1 = (1/(2*scipy.pi)) * scipy.arcsin((self.star_radius+self.planet_radius)/self.orbit_radius)
-        self.phase2 = (1/(2*scipy.pi)) * scipy.arcsin((self.star_radius-self.planet_radius)/self.orbit_radius)
-        self.phase6 = (1/(2*scipy.pi)) * scipy.arcsin(self.planet_radius/self.orbit_radius)
-
-        maxPhase = max(self.phase1, self.phase2, self.phase6)
-        self._phase = self.phase_start
-
-        result = []
-        phases = []
+        rs=self.star_radius/self.semi_major_axis
+        rp=self.planet_radius/self.semi_major_axis
+        k=(self.planet_temperature/self.star_temperature)**4
         
-        while( self._phase <= self.phase_end and self._phase <= maxPhase ):
-            
+        i1=acos(rs+rp)
+        i2=acos(rs-rp)
+        i5=acos(rp)
+        
+        #Phase limits
+        f1= (1/(2*pi))*arcsin(sqrt((rs+rp)**2 -cos(self.inclination_rad)**2)/sin(self.inclination_rad))
+        f2= (1/(2*pi))*arcsin(sqrt((rs-rp)**2 - cos(self.inclination_rad)**2)/sin(self.inclination_rad))
+        f5= (1/(2*pi))*arctan(cos(self.inclination_rad))
+        f6= (1/(2*pi))*arcsin(sqrt(rp**2 - cos(self.inclination_rad)**2)/sin(self.inclination_rad))
+    
+    
+        phases=[]
+        phi = self.phase_start
+        while phi <= self.phase_end :
+            phases.append(phi)
+            phi += self.phase_step
+    
+#        def int1( q,rs,b,x0,y0,rp ):
+#            #print (x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))
+#            return (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) - acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
+        int1 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) - acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
+        int2 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) + acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
+        int3 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*( ((2)*pi) - acos(abs((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) + acos(abs((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) )
+        int4 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*( pi + acos(abs((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) + acos(abs((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) )
+
+        mag=[]
+        iteration = 0
+        for phase in phases:
+
             if self.stopped:
                 self.onStop()
-                return
-                
-            current_result = None
-            if self._phase >= min(self.phase1, self.phase2) and self._phase <= max(self.phase1, self.phase2) :
-                a = self.x0() - self.planet_radius
-                b = self.star_radius
-                current_result = scipy.integrate.quad(self.eq1, a, b)
-                current_result = current_result[0]
-            elif self._phase >= min(self.phase2, self.phase6) and self._phase <= max(self.phase2, self.phase6):
-                a = self.x0() - self.planet_radius
-                b = self.x0() + self.planet_radius
-                current_result = scipy.integrate.quad(self.eq1, a, b)
-                current_result = current_result[0]
-            elif self._phase <= self.phase6:
-                a1 = 0
-                b1 = self.planet_radius - self.x0() 
-                a2 = self.planet_radius - self.x0()
-                b2 = self.x0() + self.planet_radius
-                
-                result1 = scipy.integrate.quad(self.eq2, a1, b1)
-                result2 = scipy.integrate.quad(self.eq1, a2, b2)
-                current_result =  result1[0] + result2[0]
-            else:
-                current_result = None
-                
-                            
-            if current_result is not None :
-                phases.append(self._phase)
-                result.append( 1 - ( -2.5*scipy.log10(((self.star_luminosity()+self.planet_luminosity())-current_result)/(self.star_luminosity()+self.planet_luminosity()))) )
+                return            
             
-
-            self._phase += self.phase_step
-
-            newcompleted = min(int((self._phase/maxPhase).real*100),100)
+            result = 1
             
-            if newcompleted != self.completed :
-                self.completed = newcompleted
-                self.onProgress(self.completed)
+            if phase >= 0 and phase < f1:
+                if self.inclination_rad > i1 and self.inclination_rad <= i2:
+                    x0=sin(2*pi*phase)
+                    y0=cos(self.inclination_rad)*cos(2*pi*phase)
+                    b=sqrt(x0**2 + y0**2) 
+                    qmin=b-rp
+                    qmax=rs                    
+                    
+                    if y0 >= rp: 
+                        integr=int1
+                    else:
+                        integr=int2
+    
+                    intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                    result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
+    
+    
+            if self.inclination_rad > i2 and self.inclination_rad <= i5:
+                if phase >= 0 and phase < f1:
+                    x0=sin(2*pi*phase)
+                    y0=cos(self.inclination_rad)*cos(2*pi*phase)
+                    b=sqrt(x0**2 + y0**2) 
+                    if phase <= f2: 
+                        qmin=b-rp
+                        qmax=b+rp
+                        if y0 >= rp: 
+                            integr=int1
+                            intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                        else:
+                            q1=x0+sqrt(rp**2 - y0**2)
+                            q2=x0-sqrt(rp**2 - y0**2)
+                            j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                            j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                            j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                            intResult=(j1+j2+j3)
+                    else:
+                        qmin=b-rp
+                        qmax=rs
+                        integr=int1
+                        intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+    
+                    result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
+                         
+            if self.inclination_rad > i5 and self.inclination_rad <= radians(90):
+                if f5 < f6:
+                    limit1=f5
+                    limit2=f6
+                else:
+                    limit1=f6
+                    limit2=0          
+                
+                if phase >= 0 and phase < f1:
+                    x0=sin(2*pi*phase)
+                    y0=cos(self.inclination_rad)*cos(2*pi*phase)
+                    b=sqrt(x0**2 + y0**2)
+    
+                    if phase < limit1:
+                        q1=sqrt(rp**2 - y0**2)+x0
+                        q4=sqrt(rp**2 - y0**2)-x0
+                        q2=sqrt(rp**2 - x0**2)+y0
+                        q3=sqrt(rp**2 - x0**2)-y0
+                        
+                        j1,err=quad(lambda q : 2*pi*q*(1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2)) ,0,(rp-b))
+                        j2,err=quad(int3,(rp-b),q3,args=(rs,b,x0,y0,rp,))
+                        j3,err=quad(int4,q3,q4,args=(rs,b,x0,y0,rp,))                
+                        j4,err=quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
+                        j5,err=quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
+                        intResult=(j1+j2+j3+j4+j5)
+                        
+                    elif phase < limit2:
+                        q1=sqrt(rp**2 - y0**2)+x0
+                        q3=sqrt(rp**2 - x0**2)-y0
+                        q4=sqrt(rp**2 - y0**2)-x0
+                        
+                        j1,err=quad(lambda q : 2*pi*q*(1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2)) ,0,(rp-b))
+                        j2,err=quad(int3,(rp-b),q4,args=(rs,b,x0,y0,rp,))
+                        j4,err=quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
+                        j5,err=quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
+                        intResult=(j1+j2+j4+j5)
+                        # nan
+                        
+                    else: # f6<= ph <f1
+                        qmin=b-rp
+                        if phase <= f2: #f6<= ph <=f2
+                            qmin=b-rp
+                            qmax=b+rp
+                            if y0 >= rp: 
+                                integr=int1
+                                intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                                
+                            else:
+                                q1=x0+sqrt(rp**2 - y0**2)
+                                q2=x0-sqrt(rp**2 - y0**2)
+                                
+                                j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                                j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                                intResult=(j1+j2+j3)
+                                #nan
+                                
+                        else:   #f2 < ph < f1
+                            qmin=b-rp
+                            qmax=rs
+                            if y0 >= rp:
+                                integr=int1
+                                intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                            else:                            
+                                q2=x0-sqrt(rp**2 - y0**2)
+                                if q2 >= rs:
+                                    integr=int1
+                                    intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                                else:
+                                    q1=x0+sqrt(rp**2 - y0**2)
+                                    if q1 < qmax:
+                                        q1=x0+sqrt(rp**2 - y0**2)
+                                        q2=x0-sqrt(rp**2 - y0**2)
+                                        
+                                        j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                        j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                                        j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                                        intResult=(j1+j2+j3)
+                                        
+                                    else:                                
+                                        
+                                        j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                        j2,err=quad(int2,q2,qmax,args=(rs,b,x0,y0,rp,))
+                                        intResult=(j1+j2)
+                    
+                    result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
+                
+            mag.append(result)                    
+            iteration += 1
+            self.completed = min(int((float(iteration)/len(phases)).real*100),100)
+            self.onProgress(self.completed)
         
-        self.onComplete(phases, result)
+        self.onComplete(phases, mag)

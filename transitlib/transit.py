@@ -5,6 +5,7 @@ from numpy import radians,pi,sin,cos,arcsin,arctan,log10,real_if_close,finfo,isn
 from numpy import arccos as acos
 from scipy import sqrt
 from scipy.integrate import quad
+import time
 
 class Transit(object):
     
@@ -17,10 +18,12 @@ class Transit(object):
         self.planet_temperature = None
         self.star_darkening     = None
         self.inclination        = None
+        self.phases_injection   = []
         
         self.phase_start     = float(0)
         self.phase_end       = float(1)
         self.phase_step      = float(0.0001)
+        self.precision       = 1e-10
         self.completed       = 0
     
         self.stopped = False
@@ -56,6 +59,12 @@ class Transit(object):
         
     def set_phase_step(self,step):
         self.phase_step = float(step)
+        
+    def set_precision(self, precision):
+        self.precision = precision
+        
+    def set_phases_injection(self, phases):
+        self.phases_injection = phases
 
     def stop(self):
         self.stopped = True
@@ -68,9 +77,14 @@ class Transit(object):
     
     def onComplete(self, phases, values):
         pass
+    
+    def quad(self, integral, a, b, args=None):
+        if a == b or abs(a - b) < finfo(float).eps:
+            return 0,0
+        return quad(integral, a, b, args=args, epsrel=self.precision, epsabs=0)
         
     def run(self):
-        
+        start = time.time()
         rs=self.star_radius/self.semi_major_axis
         rp=self.planet_radius/self.semi_major_axis
         k=(self.planet_temperature/self.star_temperature)**4
@@ -91,10 +105,15 @@ class Transit(object):
         while phi <= self.phase_end :
             phases.append(phi)
             phi += self.phase_step
+            
+        if len(self.phases_injection):
+            for phase_injection in self.phases_injection :
+                if phase_injection < 0 :
+                    continue
+                phases.append(phase_injection)
+                
+            phases = sorted(phases)
     
-#        def int1( q,rs,b,x0,y0,rp ):
-#            #print (x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))
-#            return (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) - acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
         int1 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) - acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
         int2 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*(acos((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)) + acos((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2*q)))
         int3 = lambda q,rs,b,x0,y0,rp : (1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2))*q*( ((2)*pi) - acos(abs((x0*(b**2 + q**2 - rp**2) + y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) + acos(abs((x0*(b**2 + q**2 - rp**2) - y0*sqrt(4*b**2*q**2 - (b**2 + q**2 - rp**2)**2))/(2*b**2))/q ) )
@@ -123,7 +142,7 @@ class Transit(object):
                     else:
                         integr=int2
     
-                    intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                    intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
                     result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
     
     
@@ -137,19 +156,19 @@ class Transit(object):
                         qmax=b+rp
                         if y0 >= rp: 
                             integr=int1
-                            intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                            intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
                         else:
                             q1=x0+sqrt(rp**2 - y0**2)
                             q2=x0-sqrt(rp**2 - y0**2)
-                            j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
-                            j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
-                            j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                            j1,err=self.quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                            j2,err=self.quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                            j3,err=self.quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
                             intResult=(j1+j2+j3)
                     else:
                         qmin=b-rp
                         qmax=rs
                         integr=int1
-                        intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                        intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
     
                     result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
                          
@@ -173,10 +192,10 @@ class Transit(object):
                         q3=sqrt(rp**2 - x0**2)-y0
                         
                         j1,err=quad(lambda q : 2*pi*q*(1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2)) ,0,(rp-b))
-                        j2,err=quad(int3,(rp-b),q3,args=(rs,b,x0,y0,rp,))
-                        j3,err=quad(int4,q3,q4,args=(rs,b,x0,y0,rp,))                
-                        j4,err=quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
-                        j5,err=quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
+                        j2,err=self.quad(int3,(rp-b),q3,args=(rs,b,x0,y0,rp,))
+                        j3,err=self.quad(int4,q3,q4,args=(rs,b,x0,y0,rp,))                
+                        j4,err=self.quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
+                        j5,err=self.quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
                         intResult=(j1+j2+j3+j4+j5)
                         
                     elif phase < limit2:
@@ -185,9 +204,9 @@ class Transit(object):
                         q4=sqrt(rp**2 - y0**2)-x0
                         
                         j1,err=quad(lambda q : 2*pi*q*(1-self.star_darkening+self.star_darkening*sqrt(1-(q/rs)**2)) ,0,(rp-b))
-                        j2,err=quad(int3,(rp-b),q4,args=(rs,b,x0,y0,rp,))
-                        j4,err=quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
-                        j5,err=quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
+                        j2,err=self.quad(int3,(rp-b),q4,args=(rs,b,x0,y0,rp,))
+                        j4,err=self.quad(int2,q4,q1,args=(rs,b,x0,y0,rp,))
+                        j5,err=self.quad(int1,q1,(rp+b),args=(rs,b,x0,y0,rp,))
                         intResult=(j1+j2+j4+j5)
                         # nan
                         
@@ -198,15 +217,15 @@ class Transit(object):
                             qmax=b+rp
                             if y0 >= rp: 
                                 integr=int1
-                                intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                                intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
                                 
                             else:
                                 q1=x0+sqrt(rp**2 - y0**2)
                                 q2=x0-sqrt(rp**2 - y0**2)
                                 
-                                j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
-                                j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
-                                j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                                j1,err=self.quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                j2,err=self.quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                                j3,err=self.quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
                                 intResult=(j1+j2+j3)
                                 #nan
                                 
@@ -215,34 +234,35 @@ class Transit(object):
                             qmax=rs
                             if y0 >= rp:
                                 integr=int1
-                                intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                                intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
                             else:                            
                                 q2=x0-sqrt(rp**2 - y0**2)
                                 if q2 >= rs:
                                     integr=int1
-                                    intResult,err=quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
+                                    intResult,err=self.quad(integr,qmin,qmax,args=(rs,b,x0,y0,rp,))
                                 else:
                                     q1=x0+sqrt(rp**2 - y0**2)
                                     if q1 < qmax:
                                         q1=x0+sqrt(rp**2 - y0**2)
                                         q2=x0-sqrt(rp**2 - y0**2)
                                         
-                                        j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
-                                        j2,err=quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
-                                        j3,err=quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
+                                        j1,err=self.quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                        j2,err=self.quad(int2,q2,q1,args=(rs,b,x0,y0,rp,))
+                                        j3,err=self.quad(int1,q1,qmax,args=(rs,b,x0,y0,rp,))
                                         intResult=(j1+j2+j3)
                                         
                                     else:                                
                                         
-                                        j1,err=quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
-                                        j2,err=quad(int2,q2,qmax,args=(rs,b,x0,y0,rp,))
+                                        j1,err=self.quad(int1,qmin,q2,args=(rs,b,x0,y0,rp,))
+                                        j2,err=self.quad(int2,q2,qmax,args=(rs,b,x0,y0,rp,))
                                         intResult=(j1+j2)
                     
                     result = 1-(-2.5 *log10(1-intResult/(pi*(k*rp**2 +rs**2 *(1-self.star_darkening/3) ) ) ))
-                
+            
             mag.append(result)                    
             iteration += 1
             self.completed = min(int((float(iteration)/len(phases)).real*100),100)
             self.onProgress(self.completed)
         
+        print time.time() - start, 's'
         self.onComplete(phases, mag)

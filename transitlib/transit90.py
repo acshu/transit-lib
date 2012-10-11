@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import scipy
-import scipy.integrate
-import scipy.constants
+from scipy import sin, arccos, arcsin, sqrt, log10
+from scipy.integrate import quad
+from scipy.constants import sigma, pi
 
 class Transit90(object):
     
@@ -59,19 +59,19 @@ class Transit90(object):
         self.stopped = True
     
     def star_intensity(self):
-        return scipy.constants.sigma * self.star_temperature**4
+        return sigma * self.star_temperature**4
         
     def planet_intensity(self):
-        return scipy.constants.sigma * self.planet_temperature**4
+        return sigma * self.planet_temperature**4
         
     def star_luminosity(self):
-        return scipy.pi * self.star_radius**2 * self.star_intensity() * ( 1 - (self.star_darkening/3))
+        return pi * self.star_radius**2 * self.star_intensity() * ( 1 - (self.star_darkening/3))
         
     def planet_luminosity(self):
-        return scipy.pi * self.planet_radius**2 * self.planet_intensity()
+        return pi * self.planet_radius**2 * self.planet_intensity()
         
     def x0(self):
-        return self.orbit_radius * scipy.sin(2 * scipy.pi * self._phase)
+        return self.orbit_radius * sin(2 * pi * self._phase)
         
     def x1(self, x):
         x0 = self.x0()
@@ -82,13 +82,13 @@ class Transit90(object):
         return (x0**2 + x**2 - self.planet_radius**2)/(2*x0)
         
     def gamma(self, x):
-        return scipy.arccos(self.x1(x)/x)
+        return arccos(self.x1(x)/x)
         
     def eq1(self, x):
-        return self.star_intensity() * 2 * x * self.gamma(x) * ( 1 - self.star_darkening + self.star_darkening * scipy.sqrt((1-(x/self.star_radius)**2)))
+        return self.star_intensity() * 2 * x * self.gamma(x) * ( 1 - self.star_darkening + self.star_darkening * sqrt((1-(x/self.star_radius)**2)))
         
     def eq2(self, x):
-        return self.star_intensity() * 2 * scipy.pi * x * ( 1 - self.star_darkening + self.star_darkening * scipy.sqrt((1-(x/self.star_radius)**2)))
+        return self.star_intensity() * 2 * pi * x * ( 1 - self.star_darkening + self.star_darkening * sqrt((1-(x/self.star_radius)**2)))
         
     def onStop(self):
         pass
@@ -108,9 +108,9 @@ class Transit90(object):
         if self.planet_temperature is None : raise Exception("Invalid planet temperature!")
         if self.star_darkening is None : raise Exception("Invalid star darkening coeficient!")
         
-        self.phase1 = (1/(2*scipy.pi)) * scipy.arcsin((self.star_radius+self.planet_radius)/self.orbit_radius)
-        self.phase2 = (1/(2*scipy.pi)) * scipy.arcsin((self.star_radius-self.planet_radius)/self.orbit_radius)
-        self.phase6 = (1/(2*scipy.pi)) * scipy.arcsin(self.planet_radius/self.orbit_radius)
+        self.phase1 = (1/(2*pi)) * arcsin((self.star_radius+self.planet_radius)/self.orbit_radius)
+        self.phase2 = (1/(2*pi)) * arcsin((self.star_radius-self.planet_radius)/self.orbit_radius)
+        self.phase6 = (1/(2*pi)) * arcsin(self.planet_radius/self.orbit_radius)
 
         maxPhase = max(self.phase1, self.phase2, self.phase6)
         self._phase = self.phase_start
@@ -128,12 +128,12 @@ class Transit90(object):
             if self._phase >= min(self.phase1, self.phase2) and self._phase <= max(self.phase1, self.phase2) :
                 a = self.x0() - self.planet_radius
                 b = self.star_radius
-                current_result = scipy.integrate.quad(self.eq1, a, b)
+                current_result = quad(self.eq1, a, b)
                 current_result = current_result[0]
             elif self._phase >= min(self.phase2, self.phase6) and self._phase <= max(self.phase2, self.phase6):
                 a = self.x0() - self.planet_radius
                 b = self.x0() + self.planet_radius
-                current_result = scipy.integrate.quad(self.eq1, a, b)
+                current_result = quad(self.eq1, a, b)
                 current_result = current_result[0]
             elif self._phase <= self.phase6:
                 a1 = 0
@@ -141,8 +141,8 @@ class Transit90(object):
                 a2 = self.planet_radius - self.x0()
                 b2 = self.x0() + self.planet_radius
                 
-                result1 = scipy.integrate.quad(self.eq2, a1, b1)
-                result2 = scipy.integrate.quad(self.eq1, a2, b2)
+                result1 = quad(self.eq2, a1, b1)
+                result2 = quad(self.eq1, a2, b2)
                 current_result =  result1[0] + result2[0]
             else:
                 current_result = None
@@ -150,7 +150,7 @@ class Transit90(object):
                             
             if current_result is not None :
                 phases.append(self._phase)
-                result.append( 1 - ( -2.5*scipy.log10(((self.star_luminosity()+self.planet_luminosity())-current_result)/(self.star_luminosity()+self.planet_luminosity()))) )
+                result.append( 1 - ( -2.5*log10(((self.star_luminosity()+self.planet_luminosity())-current_result)/(self.star_luminosity()+self.planet_luminosity()))) )
             
 
             self._phase += self.phase_step

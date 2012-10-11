@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 
-from numpy import radians,pi,sin,cos,arcsin,arctan,log10,real_if_close,finfo,isnan
+from numpy import radians,pi,sin,cos,arcsin,arctan,log10,finfo
 from numpy import arccos as acos
 from scipy import sqrt
 from scipy.integrate import quad

@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 
-from numpy import radians, pi, sin, cos, arcsin, arctan, log10, finfo
+from numpy import radians, degrees, sin, cos, arcsin, arctan, finfo
 from numpy import arccos as acos
-from scipy import sqrt
+from scipy import sqrt, log
 from scipy.integrate import quad
+from scipy.constants import pi, sigma
 import time
 
 
@@ -17,9 +18,12 @@ class Transit(object):
         self.planet_radius = None
         self.star_temperature = None
         self.planet_temperature = None
-        self.star_darkening = None
+        self.star_darkening_1 = None
+        self.star_darkening_2 = None
         self.inclination = None
         self.phases_injection = []
+        self.star_darkening_type = 'linear'
+        self.star_darkening_law = None
 
         self.phase_start = float(0)
         self.phase_end = float(1)
@@ -46,11 +50,17 @@ class Transit(object):
         self.planet_temperature = float(temperature)
 
     def set_inclination(self, inclination):
-        self.inclination = inclination
+        self.inclination = float(inclination)
         self.inclination_rad = radians(self.inclination)
+        
+    def set_star_darkening_type(self, type):
+        self.star_darkening_type = type
 
-    def set_star_darkening(self, darkening):
-        self.star_darkening = float(darkening)
+    def set_star_darkening_1(self, darkening):
+        self.star_darkening_1 = float(darkening)
+        
+    def set_star_darkening_2(self, darkening):
+        self.star_darkening_2 = float(darkening)
 
     def set_phase_start(self, start):
         self.phase_start = float(start)
@@ -99,7 +109,8 @@ class Transit(object):
         f2 = (1 / (2 * pi)) * arcsin(sqrt((rs - rp) ** 2 - cos(self.inclination_rad) ** 2) / sin(self.inclination_rad))
         f5 = (1 / (2 * pi)) * arctan(cos(self.inclination_rad))
         f6 = (1 / (2 * pi)) * arcsin(sqrt(rp ** 2 - cos(self.inclination_rad) ** 2) / sin(self.inclination_rad))
-
+        
+        
         phases = []
         phi = self.phase_start
         while phi <= self.phase_end:
@@ -114,10 +125,38 @@ class Transit(object):
 
             phases = sorted(phases)
 
-        int1 = lambda q, rs, b, x0, y0, rp: (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)) * q * (acos((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)) - acos((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)))
-        int2 = lambda q, rs, b, x0, y0, rp: (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)) * q * (acos((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)) + acos((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)))
-        int3 = lambda q, rs, b, x0, y0, rp: (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)) * q * ((2 * pi) - acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q) + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q))
-        int4 = lambda q, rs, b, x0, y0, rp: (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)) * q * (pi + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q) + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q))
+        
+        # darkening laws
+        star_luminosity_darkening_law = None
+           
+        if self.star_darkening_type == 'linear' :
+            self.star_darkening_law = lambda q: 1 - self.star_darkening_1 + self.star_darkening_1 * sqrt(1 - (q / rs) ** 2)
+            star_luminosity_darkening_law = 1 - self.star_darkening_1 / 3
+            
+        elif self.star_darkening_type == 'quadratic' :
+            self.star_darkening_law = lambda q: 1 - self.star_darkening_1 * (1 - sqrt(1 - (q / rs) ** 2)) - self.star_darkening_2 * (1 - sqrt(1 - (q / rs) ** 2)) ** 2
+            star_luminosity_darkening_law = 1 - self.star_darkening_1 / 3 - self.star_darkening_2 / 6
+            
+        elif self.star_darkening_type == 'squareroot' :
+            self.star_darkening_law = lambda q: 1 - self.star_darkening_1 * (1 - sqrt(1 - (q / rs) ** 2)) - self.star_darkening_2 * (1 - (1 - (q / rs) ** 2) ** (1.0 / 4.0))
+            star_luminosity_darkening_law = 1 - self.star_darkening_1 / 3 - self.star_darkening_2 / 5
+            
+        elif self.star_darkening_type == 'logarithmic' :
+            self.star_darkening_law = lambda q: 1 - self.star_darkening_1 * (1 - sqrt(1 - (q / rs) ** 2)) - self.star_darkening_2 * sqrt(1 - (q / rs) ** 2) * log(sqrt(1 - (q / rs) ** 2))
+            star_luminosity_darkening_law = 1 - self.star_darkening_1 / 3 - 2 * self.star_darkening_2 / 9
+            
+        
+        star_intensity = sigma * self.star_temperature ** 4
+        planet_intensity = sigma * self.planet_temperature ** 4
+        
+        star_luminosity = pi * self.star_radius ** 2 * star_intensity * star_luminosity_darkening_law
+        planet_luminosity = pi * self.planet_radius ** 2 * planet_intensity
+        
+
+        int1 = lambda q, rs, b, x0, y0, rp : self.star_darkening_law(q) * q * (acos((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)) - acos((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)))
+        int2 = lambda q, rs, b, x0, y0, rp : self.star_darkening_law(q) * q * (acos((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)) + acos((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2 * q)))
+        int3 = lambda q, rs, b, x0, y0, rp : self.star_darkening_law(q) * q * ((2 * pi) - acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q) + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q))
+        int4 = lambda q, rs, b, x0, y0, rp : self.star_darkening_law(q) * q * (pi + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) + y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q) + acos(abs((x0 * (b ** 2 + q ** 2 - rp ** 2) - y0 * sqrt(4 * b ** 2 * q ** 2 - (b ** 2 + q ** 2 - rp ** 2) ** 2)) / (2 * b ** 2)) / q))
 
         mag = []
         iteration = 0
@@ -143,7 +182,7 @@ class Transit(object):
                         integr = int2
 
                     intResult, err = self.quad(integr, qmin, qmax, args=(rs, b, x0, y0, rp))
-                    result = 1 - (-2.5 * log10(1 - intResult / (pi * (k * rp ** 2 + rs ** 2 * (1 - self.star_darkening / 3)))))
+                    result = intResult
 
             if self.inclination_rad > i2 and self.inclination_rad <= i5:
                 if phase >= 0 and phase < f1:
@@ -163,13 +202,14 @@ class Transit(object):
                             j2, err = self.quad(int2, q2, q1, args=(rs, b, x0, y0, rp))
                             j3, err = self.quad(int1, q1, qmax, args=(rs, b, x0, y0, rp))
                             intResult = (j1 + j2 + j3)
+                        
                     else:
                         qmin = b - rp
                         qmax = rs
                         integr = int1
                         intResult, err = self.quad(integr, qmin, qmax, args=(rs, b, x0, y0, rp))
 
-                    result = 1 - (-2.5 * log10(1 - intResult / (pi * (k * rp ** 2 + rs ** 2 * (1 - self.star_darkening / 3)))))
+                    result = intResult
 
             if self.inclination_rad > i5 and self.inclination_rad <= radians(90):
                 if f5 < f6:
@@ -190,7 +230,7 @@ class Transit(object):
                         q2 = sqrt(rp ** 2 - x0 ** 2) + y0
                         q3 = sqrt(rp ** 2 - x0 ** 2) - y0
 
-                        j1, err = quad(lambda q: 2 * pi * q * (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)), 0, (rp - b))
+                        j1, err = quad(lambda q: 2 * pi * q * self.star_darkening_law(q), 0, (rp - b))
                         j2, err = self.quad(int3, (rp - b), q3, args=(rs, b, x0, y0, rp))
                         j3, err = self.quad(int4, q3, q4, args=(rs, b, x0, y0, rp))
                         j4, err = self.quad(int2, q4, q1, args=(rs, b, x0, y0, rp))
@@ -202,7 +242,7 @@ class Transit(object):
                         q3 = sqrt(rp ** 2 - x0 ** 2) - y0
                         q4 = sqrt(rp ** 2 - y0 ** 2) - x0
 
-                        j1, err = quad(lambda q: 2 * pi * q * (1 - self.star_darkening + self.star_darkening * sqrt(1 - (q / rs) ** 2)), 0, (rp - b))
+                        j1, err = quad(lambda q: 2 * pi * q * self.star_darkening_law(q), 0, (rp - b))
                         j2, err = self.quad(int3, (rp - b), q4, args=(rs, b, x0, y0, rp))
                         j4, err = self.quad(int2, q4, q1, args=(rs, b, x0, y0, rp))
                         j5, err = self.quad(int1, q1, (rp + b), args=(rs, b, x0, y0, rp))
@@ -259,12 +299,13 @@ class Transit(object):
                                         j2, err = self.quad(int2, q2, qmax, args=(rs, b, x0, y0, rp))
                                         intResult = (j1 + j2)
 
-                    result = 1 - (-2.5 * log10(1 - intResult / (pi * (k * rp ** 2 + rs ** 2 * (1 - self.star_darkening / 3)))))
-
+            # final Flux
+            result = 1 - intResult / ( pi * k * rp ** 2 + (star_luminosity / (star_intensity * self.semi_major_axis ** 2 )))
+            
             mag.append(result)
             iteration += 1
             self.completed = min(int((float(iteration) / len(phases)).real * 100), 100)
             self.onProgress(self.completed)
 
-        print time.time() - start, 's'
+        #print time.time() - start, 's'        
         self.onComplete(phases, mag)

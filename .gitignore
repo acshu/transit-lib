@@ -32,3 +32,4 @@ export.txt
 /.spyderproject
 /params.txt
 /result.dat
+/transitlib/transit90.py

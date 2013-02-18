@@ -6,7 +6,7 @@ from numpy import arccos as acos
 from scipy import sqrt, log
 from scipy.integrate import quad
 from scipy.constants import pi, sigma
-import time
+import time, sys, math
 
 
 class Transit(object):
@@ -113,19 +113,20 @@ class Transit(object):
         
         phases = []
         phi = self.phase_start
-        while phi <= self.phase_end:
+        while phi < self.phase_end :
             phases.append(phi)
             phi += self.phase_step
 
         if len(self.phases_injection):
             for phase_injection in self.phases_injection:
-                if phase_injection < 0:
-                    continue
-                phases.append(phase_injection)
+                phases.append(math.fabs(phase_injection))
 
-            phases = sorted(phases)
 
-        
+        # final point may missing due delta
+        phases.append(self.phase_end)
+        # make unique and sort phases
+        phases = sorted(list(set(phases)))
+
         # darkening laws
         star_luminosity_darkening_law = None
            
@@ -167,6 +168,7 @@ class Transit(object):
                 return
 
             result = 1
+            intResult = None
 
             if phase >= 0 and phase < f1:
                 if self.inclination_rad > i1 and self.inclination_rad <= i2:
@@ -300,12 +302,15 @@ class Transit(object):
                                         intResult = (j1 + j2)
 
             # final Flux
-            result = 1 - intResult / ( pi * k * rp ** 2 + (star_luminosity / (star_intensity * self.semi_major_axis ** 2 )))
-            
+            if intResult is not None :
+                result = 1 - intResult / ( pi * k * rp ** 2 + (star_luminosity / (star_intensity * self.semi_major_axis ** 2 )))
+            else:
+                result = 1
+                        
             mag.append(result)
             iteration += 1
             self.completed = min(int((float(iteration) / len(phases)).real * 100), 100)
             self.onProgress(self.completed)
 
-        #print time.time() - start, 's'        
+        #print time.time() - start, 's'
         self.onComplete(phases, mag)

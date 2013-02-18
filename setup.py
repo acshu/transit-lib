@@ -4,9 +4,9 @@ from setuptools import setup, find_packages
 
 setup(name='transitlib',
       version='0.1',
-      description="Star planet transit calculation package",
-      author="Anatoli Vladev",
-      author_email="avladev@gmail.com",
+      description="Transit Analytical Curve maker",
+      author="Vergil Yotov",
+      author_email="vergil.yotov@gmail.com",
       url="http://github.com/acshu/transit-lib",
       packages=find_packages(),
       scripts=['transit','transit.bat'],

@@ -1,6 +1,6 @@
 transit-lib
 ===========
-transit-lib is a python package for synthetic curve generation for planetary transits.
+transit-lib is a python package for synthetic curve generation of planetary transits.
 
 Requirements
 ------------
@@ -11,4 +11,6 @@ For Windows users we recommend [Python(x,y)](https://code.google.com/p/pythonxy/
 
 GUI
 ---
-You can also download the latest version of our [GUI application](http://astro.shu-bg.net/software/tac-maker/). It's based on this package and includes features like load and save of your models, import of observational data, result plot and export function.
+You can also download the latest version of our [GUI application](http://astro.shu-bg.net/software/tac-maker/). It's based on this package and includes features like loading and saving of your models, import of observational data, result plot and export function.
+
+The code of the GUI application can be downloaded from our [transit-gui](https://github.com/acshu/transit-gui) repository.
